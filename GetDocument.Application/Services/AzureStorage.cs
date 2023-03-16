@@ -1,7 +1,10 @@
 using Application.Interfaces;
+using Azure;
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using Azure.Storage.Blobs.Specialized;
 using Azure.Storage.Sas;
+using Domain.Azure;
 using Microsoft.Extensions.Logging;
 
 namespace Application.Services;
@@ -17,10 +20,43 @@ public class AzureStorage : IAzureStorage
         _logger = logger;
     }
 
+    public async Task<Blob?> GetBlobAsync(string blobFilename)
+    {
+        Blob blob = new Blob();
+        try
+        {
+            // Get a reference to the blob uploaded earlier from the API in the container from configuration settings
+            BlobClient file = _blobContainerClient.GetBlobClient(blobFilename);
+
+            // Check if the file exists in the container
+            if (await file.ExistsAsync())
+            {
+                // Add each file retrieved from the storage container to the files list by creating a BlobDto object
+                string uri = file.Uri.ToString();
+                var name = file.Name;
+                var fullUri = $"{uri}/{name}";
+
+                blob = new Blob
+                {
+                    Uri = fullUri,
+                    Name = name
+                };
+                return blob;
+            }
+        }
+        catch (RequestFailedException ex)
+            when (ex.ErrorCode == BlobErrorCode.BlobNotFound)
+        {
+            // Log error to console
+            _logger.LogError($"File {blobFilename} was not found.");
+        }
+        // Return blob to the requesting method
+        return blob;
+    }
+
     #endregion
 
-    #region Generate SasUri
-    // TODO: make private method
+    #region Generate SasUri   
     public Uri? GetServiceSasUriForContainer(string? storedPolicyName = null)
     {
         Uri? sasUri = null;
@@ -54,7 +90,7 @@ public class AzureStorage : IAzureStorage
                 sasBuilder.Identifier = storedPolicyName;
             }
             // Get the SAS URI for the specified container.
-             sasUri = _blobContainerClient.GenerateSasUri(sasBuilder);
+            sasUri = _blobContainerClient.GenerateSasUri(sasBuilder);
 
             // Return the SAS URI for blob container.
             return sasUri;
@@ -108,6 +144,6 @@ public class AzureStorage : IAzureStorage
             return null;
         }
     }
-   
+
     #endregion
 }

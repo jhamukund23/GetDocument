@@ -35,6 +35,8 @@ namespace GetDocument
                 // Here we can actually write the code to call microservices
                 Console.WriteLine($"Consuming topic message with the below data\n CorrelationId: {value.CorrelationId}\n FileName: {value.FileName}\n FileSize: {value.FileSize}");
 
+                
+                
                 // Get the SAS URI.
                 Uri? sasUrl = _storage.GetServiceSasUriForContainer();
 
