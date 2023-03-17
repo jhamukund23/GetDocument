@@ -22,7 +22,8 @@ Host.CreateDefaultBuilder(args)
    .ConfigureServices((context, services) =>
    {
        // Register Azure Blob Container Client
-       services.AddSingleton(x => new BlobContainerClient(config["BlobConnectionString"], config["BlobContainerName"]));     
+       services.AddSingleton(x => new BlobContainerClient(config["BlobConnectionString"], config["BlobContainerName"]));
+       services.AddTransient(x => new BlobServiceClient(config["BlobConnectionString"]));
 
        var clientConfig = new ClientConfig()
        {

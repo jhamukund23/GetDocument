@@ -9,7 +9,7 @@ namespace Domain.Models
     public class GetDocumentInbound
     {
         public Guid CorrelationId { get; set; }
-        public string? FileName { get; set; }
+        public string FileName { get; set; } = string.Empty;
         public string? FileSize { get; set; }
 
     }

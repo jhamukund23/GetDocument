@@ -11,18 +11,23 @@ namespace Application.Services;
 
 public class AzureStorage : IAzureStorage
 {
-    #region Dependency Injection / Constructor
+    #region Constructor
     private readonly BlobContainerClient _blobContainerClient;
+    private readonly BlobServiceClient _blobServiceClient;
     private readonly ILogger<AzureStorage> _logger;
-    public AzureStorage(BlobContainerClient blobContainerClient, ILogger<AzureStorage> logger)
+    public AzureStorage(BlobContainerClient blobContainerClient, BlobServiceClient blobServiceClient, ILogger<AzureStorage> logger)
     {
         _blobContainerClient = blobContainerClient;
+        _blobServiceClient = blobServiceClient;
         _logger = logger;
     }
 
+    #endregion
+
+    #region Blob Operations   
     public async Task<Blob?> GetBlobAsync(string blobFilename)
     {
-        Blob blob = new Blob();
+        Blob blob = new();
         try
         {
             // Get a reference to the blob uploaded earlier from the API in the container from configuration settings
@@ -54,6 +59,67 @@ public class AzureStorage : IAzureStorage
         return blob;
     }
 
+    public async Task<BlobContainerClient> CreateContainerAsync()
+    {
+        // Name the sample container based on new GUID to ensure uniqueness.
+        // The container name must be lowercase.
+        string containerName = "container-" + Guid.NewGuid();
+
+        try
+        {
+            // Create the container
+            BlobContainerClient container = await _blobServiceClient.CreateBlobContainerAsync(containerName);
+
+            if (await container.ExistsAsync())
+            {
+                _logger.LogInformation("Created container {0}", container.Name);
+                return container;
+            }
+        }
+        catch (RequestFailedException ex)
+        {
+            _logger.LogError("HTTP error code {0}: {1}", ex.Status, ex.ErrorCode);
+            _logger.LogError($"Unhandled Exception. ID: {ex.StackTrace} - Message: {ex.Message}");
+        }
+
+        return null;
+    }
+
+    public async Task CopyBlobAsync(string blobFilename, string sourceContainer, string destinationContainer)
+    {
+        // Instantiate BlobClient for the source blob and destination blob
+        BlobClient sourceBlob = _blobServiceClient
+                                .GetBlobContainerClient(sourceContainer)
+                                .GetBlobClient(blobFilename);
+        BlobClient destinationBlob = _blobServiceClient
+                                .GetBlobContainerClient(destinationContainer)
+                                .GetBlobClient(blobFilename);
+
+        // Lease the source blob for the copy operation 
+        // to prevent another client from modifying it
+        BlobLeaseClient lease = sourceBlob.GetBlobLeaseClient();
+
+        try
+        {
+            // Acquire an infinite lease on the source blob
+            await lease.AcquireAsync(BlobLeaseClient.InfiniteLeaseDuration);
+
+            // Start the copy operation and wait for it to complete
+            CopyFromUriOperation copyOperation = await destinationBlob.StartCopyFromUriAsync(sourceBlob.Uri);
+            await copyOperation.WaitForCompletionAsync();
+        }
+        catch (RequestFailedException ex)
+        {
+            // Handle the exception
+            _logger.LogError("HTTP error code {0}: {1}", ex.Status, ex.ErrorCode);
+            _logger.LogError($"Unhandled Exception. ID: {ex.StackTrace} - Message: {ex.Message}");
+        }
+        finally
+        {
+            // Release the lease on the source blob
+            await lease.ReleaseAsync();
+        }
+    }
     #endregion
 
     #region Generate SasUri   
@@ -100,8 +166,6 @@ public class AzureStorage : IAzureStorage
             return sasUri;
         }
     }
-
-
     public async Task<Uri?> GetServiceSasUriForContainerAsync(string? storedPolicyName = null)
     {
         // Check and create container if not exist in azure storage.

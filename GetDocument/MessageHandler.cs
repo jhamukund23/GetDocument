@@ -16,14 +16,14 @@ namespace GetDocument
     public class MessageHandler : IKafkaHandler<string, GetDocumentInbound>
     {
         private readonly IKafkaProducer<string, GetDocumentOutbound> _outboundProducer;
-        private readonly IKafkaProducer<string, GetDocumentError> _errorOutboundProducer;       
+        private readonly IKafkaProducer<string, GetDocumentError> _errorOutboundProducer;
         private readonly IAzureStorage _storage;
         public MessageHandler(
              IKafkaProducer<string, GetDocumentOutbound> outboundProducer,
-             IKafkaProducer<string, GetDocumentError> errorOutboundProducer,           
+             IKafkaProducer<string, GetDocumentError> errorOutboundProducer,
              IAzureStorage storage
             )
-        {           
+        {
             _storage = storage;
             _outboundProducer = outboundProducer;
             _errorOutboundProducer = errorOutboundProducer;
@@ -35,21 +35,23 @@ namespace GetDocument
                 // Here we can actually write the code to call microservices
                 Console.WriteLine($"Consuming topic message with the below data\n CorrelationId: {value.CorrelationId}\n FileName: {value.FileName}\n FileSize: {value.FileSize}");
 
-                
-                
+                var blob = _storage.GetBlobAsync(value.FileName);
+                if (blob != null)
+                { }
+
                 // Get the SAS URI.
                 Uri? sasUrl = _storage.GetServiceSasUriForContainer();
 
                 // Send correlation id and sasUrl to Kafka response topic.
                 ProduceAddDocumentOutbound(value.CorrelationId, sasUrl);
-              
+
 
             }
             catch (Exception ex)
             {
                 // Send correlation id and error message to Kafka error response topic.
                 ProduceAddDocumentError(value.CorrelationId, ex.Message);
-            }           
+            }
             return Task.CompletedTask;
         }
 
